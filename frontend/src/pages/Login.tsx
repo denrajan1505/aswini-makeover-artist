@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Loader2, Sparkles } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '@/hooks/useAuth'
 
@@ -35,9 +35,11 @@ export default function Login() {
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-2.5 mb-4">
-            <div className="w-12 h-12 bg-gradient-to-br from-brand-400 to-gold-400 rounded-2xl flex items-center justify-center shadow-lg">
-              <Sparkles className="w-6 h-6 text-white" />
-            </div>
+            <img
+              src="/logo.png"
+              alt="Aswini Makeover Artist"
+              className="w-24 h-24 rounded-full object-cover object-top shadow-lg"
+            />
           </div>
           <h1 className="font-serif text-2xl font-bold text-brand-900">Aswini Makeover Artist</h1>
           <p className="text-brand-800/60 text-sm mt-1">Enhance • Empower • Transform</p>
