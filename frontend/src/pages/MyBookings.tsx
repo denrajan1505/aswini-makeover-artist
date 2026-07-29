@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Loader2, CalendarClock, MapPin, Phone, Download, CalendarPlus, XCircle, Edit3 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useMyBookings } from '@/hooks/useCatalog'
-import { getServices, rescheduleBooking, cancelBooking, getBookedSlots, getErrorMessage } from '@/lib/api'
+import { getServices, rescheduleBooking, cancelBooking, getBookedSlots, getPaymentHistory, getErrorMessage } from '@/lib/api'
 import type { ServiceResponse, BookingResponse } from '@/types'
 
 const TABS = ['Upcoming', 'Completed', 'Cancelled'] as const
@@ -29,7 +29,39 @@ function statusBadge(status: string): string {
   return map[status] || 'bg-brand-100 text-brand-700'
 }
 
-function downloadInvoice(booking: BookingResponse, serviceName: string) {
+function paymentStatusBadge(status: string): string {
+  const map: Record<string, string> = {
+    unpaid: 'bg-red-100 text-red-700',
+    partially_paid: 'bg-yellow-100 text-yellow-700',
+    paid: 'bg-green-100 text-green-700',
+  }
+  return map[status] || 'bg-brand-100 text-brand-700'
+}
+
+function paymentStatusLabel(status: string): string {
+  const map: Record<string, string> = { unpaid: 'Unpaid', partially_paid: 'Partially Paid', paid: 'Paid' }
+  return map[status] || status
+}
+
+async function downloadInvoice(booking: BookingResponse, serviceName: string) {
+  let paymentLines: string
+  try {
+    const { data: payments } = await getPaymentHistory(booking.id)
+    paymentLines = payments.length
+      ? payments
+          .map(
+            (p) =>
+              `${p.created_at.slice(0, 10)}  ${p.method.replace(/_/g, ' ').padEnd(14)}  Rs. ${p.amount}${p.note ? `  (${p.note})` : ''}`,
+          )
+          .join('\n')
+      : 'No payments recorded yet.'
+  } catch {
+    paymentLines = 'Could not load payment history.'
+  }
+
+  const closingLine =
+    booking.payment_status === 'paid' ? 'PAID IN FULL' : `Balance Due: Rs. ${booking.balance_amount}`
+
   const text = `========================================
 ASWINI MAKEOVER ARTIST — INVOICE
 ========================================
@@ -39,11 +71,15 @@ Date: ${booking.booking_date}
 Time: ${booking.time_slot}
 Customer: ${booking.customer_name}
 Phone: ${booking.customer_phone}
+Payment Mode: ${booking.payment_mode.toString().replace(/_/g, ' ')}
 ----------------------------------------
 Total Amount: Rs. ${booking.total_amount}
-Advance Paid: Rs. ${booking.advance_amount}
-Payment Status: ${booking.payment_status}
-Booking Status: ${booking.status}
+Amount Paid: Rs. ${booking.amount_paid}
+----------------------------------------
+Payment History:
+${paymentLines}
+----------------------------------------
+${closingLine}
 ========================================
 Thank you for choosing Aswini Makeover Artist!
 `
@@ -179,15 +215,18 @@ export default function MyBookings() {
               </div>
               <div className="flex justify-between items-center mt-3 pt-3 border-t border-brand-100 text-sm">
                 <span className="text-brand-800/60">
-                  Advance:{' '}
-                  <span className="font-semibold text-gold-500">₹{b.advance_amount.toLocaleString('en-IN')}</span>
+                  Paid: <span className="font-semibold text-gold-500">₹{b.amount_paid.toLocaleString('en-IN')}</span>
+                  <span className="text-brand-800/40"> / ₹{b.total_amount.toLocaleString('en-IN')}</span>
                 </span>
-                <span
-                  className={`text-xs font-semibold rounded-full px-2.5 py-0.5 capitalize ${b.payment_status === 'paid' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}
-                >
-                  {b.payment_status}
+                <span className={`text-xs font-semibold rounded-full px-2.5 py-0.5 ${paymentStatusBadge(b.payment_status)}`}>
+                  {paymentStatusLabel(b.payment_status)}
                 </span>
               </div>
+              {b.balance_amount > 0 && (
+                <p className="text-xs text-red-500 font-semibold mt-1">
+                  Balance Due: ₹{b.balance_amount.toLocaleString('en-IN')}
+                </p>
+              )}
 
               <div className="flex flex-wrap gap-2 mt-3">
                 <button

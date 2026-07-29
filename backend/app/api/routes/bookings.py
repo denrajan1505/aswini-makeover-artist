@@ -96,7 +96,16 @@ async def create_booking(request: Request, booking: BookingCreate, authorization
         raise HTTPException(status_code=409, detail="This time slot is already booked")
 
     total_amount = _apply_coupon(service.data["price"], booking.coupon_code)
-    advance_amount = round(total_amount * settings.advance_payment_percent / 100, 2)
+    if booking.payment_mode == "full":
+        advance_amount = total_amount
+    elif booking.payment_mode == "pay_after_service":
+        advance_amount = 0.0
+    else:
+        advance_amount = round(total_amount * settings.advance_payment_percent / 100, 2)
+
+    # Pay-after-service bookings don't wait on a payment to be confirmed;
+    # full/advance bookings stay pending until the Razorpay payment lands.
+    initial_status = "confirmed" if booking.payment_mode == "pay_after_service" else "pending"
 
     row = {
         "booking_code": _generate_booking_code(),
@@ -112,8 +121,8 @@ async def create_booking(request: Request, booking: BookingCreate, authorization
         "coupon_code": booking.coupon_code,
         "total_amount": total_amount,
         "advance_amount": advance_amount,
-        "payment_status": "pending",
-        "status": "pending",
+        "payment_mode": booking.payment_mode,
+        "status": initial_status,
     }
 
     try:

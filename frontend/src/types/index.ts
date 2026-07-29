@@ -54,8 +54,10 @@ export interface PortfolioItemCreateInput {
   sort_order?: number
 }
 
-export type PaymentStatus = 'pending' | 'paid' | 'failed' | 'refunded'
+export type PaymentStatus = 'unpaid' | 'partially_paid' | 'paid'
 export type BookingStatus = 'pending' | 'confirmed' | 'completed' | 'cancelled'
+export type PaymentMode = 'full' | 'advance' | 'pay_after_service'
+export type PaymentMethod = 'cash' | 'upi' | 'google_pay' | 'phonepe' | 'razorpay' | 'card' | 'bank_transfer'
 
 export interface BookingResponse {
   id: string
@@ -72,6 +74,9 @@ export interface BookingResponse {
   coupon_code?: string | null
   total_amount: number
   advance_amount: number
+  payment_mode: PaymentMode | string
+  amount_paid: number
+  balance_amount: number
   payment_status: PaymentStatus | string
   status: BookingStatus | string
   created_at: string
@@ -87,6 +92,30 @@ export interface BookingCreateInput {
   time_slot: string
   special_request?: string
   coupon_code?: string
+  payment_mode: PaymentMode
+}
+
+export interface PaymentRecordResponse {
+  id: string
+  booking_id: string
+  amount: number
+  method: PaymentMethod | string
+  razorpay_order_id?: string | null
+  razorpay_payment_id?: string | null
+  note?: string | null
+  recorded_by: string
+  created_at: string
+}
+
+export interface PaymentRecordCreateInput {
+  amount: number
+  method: PaymentMethod
+  note?: string
+}
+
+export interface RecordPaymentResponse {
+  booking: BookingResponse
+  payment: PaymentRecordResponse
 }
 
 export interface BookingRescheduleInput {

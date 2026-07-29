@@ -34,13 +34,13 @@ async def dashboard(_admin=Depends(require_admin)):
     cancelled = supabase.table("bookings").select("id", count="exact").eq("status", "cancelled").execute()
 
     month_prefix = today[:7]  # YYYY-MM
-    paid_bookings = (
-        supabase.table("bookings").select("advance_amount, total_amount, status, booking_date")
-        .eq("payment_status", "paid").execute()
+    month_payments = (
+        supabase.table("payment_records").select("amount, created_at")
+        .gte("created_at", f"{month_prefix}-01").execute()
     )
     monthly_revenue = sum(
-        b["advance_amount"] for b in (paid_bookings.data or [])
-        if b["booking_date"].startswith(month_prefix)
+        p["amount"] for p in (month_payments.data or [])
+        if p["created_at"].startswith(month_prefix)
     )
 
     return {

@@ -1,10 +1,13 @@
 from pydantic import BaseModel, EmailStr, Field
-from typing import Optional, List, Any
+from typing import Optional, List, Any, Literal
 from datetime import date, datetime
 
 VALID_TIME_SLOT_PATTERN = r"^\d{1,2}:\d{2}\s*-\s*\d{1,2}:\d{2}$"
 PHONE_PATTERN = r"^[+]?[0-9\s-]{7,15}$"
 COUPON_CODE_PATTERN = r"^[A-Za-z0-9_-]{3,30}$"
+
+PaymentMode = Literal["full", "advance", "pay_after_service"]
+PaymentMethod = Literal["cash", "upi", "google_pay", "phonepe", "razorpay", "card", "bank_transfer"]
 
 
 class ServiceResponse(BaseModel):
@@ -65,6 +68,7 @@ class BookingCreate(BaseModel):
     time_slot: str = Field(..., pattern=VALID_TIME_SLOT_PATTERN)
     special_request: Optional[str] = Field(None, max_length=1000)
     coupon_code: Optional[str] = Field(None, pattern=COUPON_CODE_PATTERN)
+    payment_mode: PaymentMode = "advance"
 
 
 class BookingResponse(BaseModel):
@@ -82,6 +86,9 @@ class BookingResponse(BaseModel):
     coupon_code: Optional[str]
     total_amount: float
     advance_amount: float
+    payment_mode: str
+    amount_paid: float
+    balance_amount: float
     payment_status: str
     status: str
     created_at: datetime
@@ -101,6 +108,24 @@ class VerifyPaymentRequest(BaseModel):
     razorpay_order_id: str = Field(..., max_length=100)
     razorpay_payment_id: str = Field(..., max_length=100)
     razorpay_signature: str = Field(..., max_length=200)
+
+
+class PaymentRecordCreate(BaseModel):
+    amount: float = Field(..., gt=0)
+    method: PaymentMethod
+    note: Optional[str] = Field(None, max_length=500)
+
+
+class PaymentRecordResponse(BaseModel):
+    id: str
+    booking_id: str
+    amount: float
+    method: str
+    razorpay_order_id: Optional[str]
+    razorpay_payment_id: Optional[str]
+    note: Optional[str]
+    recorded_by: str
+    created_at: datetime
 
 
 class ReviewCreate(BaseModel):

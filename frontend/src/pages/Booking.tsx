@@ -5,7 +5,7 @@ import toast from 'react-hot-toast'
 import { useAuth } from '@/hooks/useAuth'
 import { useServices } from '@/hooks/useCatalog'
 import { getBookedSlots, createBooking, createPaymentOrder, verifyPayment, getErrorMessage } from '@/lib/api'
-import type { BookingResponse } from '@/types'
+import type { BookingResponse, PaymentMode } from '@/types'
 
 const TIME_SLOTS = [
   '09:00 - 10:00',
@@ -20,6 +20,13 @@ const TIME_SLOTS = [
 
 const STEPS = ['Service', 'Date & Time', 'Your Details', 'Payment', 'Confirmed']
 const WHATSAPP_NUMBER = import.meta.env.VITE_WHATSAPP_NUMBER || '917708566191'
+const ADVANCE_PERCENT = Number(import.meta.env.VITE_ADVANCE_PAYMENT_PERCENT) || 30
+
+const PAYMENT_OPTIONS: { mode: PaymentMode; label: string; sub: string }[] = [
+  { mode: 'full', label: 'Pay Full Amount Online', sub: 'Pay the entire amount now via Razorpay' },
+  { mode: 'advance', label: 'Pay Advance Online', sub: `Pay ${ADVANCE_PERCENT}% now, balance after service` },
+  { mode: 'pay_after_service', label: 'Pay After Service', sub: 'No payment now, settle the full amount after your service' },
+]
 
 function todayISO() {
   return new Date().toISOString().split('T')[0]
@@ -58,6 +65,7 @@ export default function Booking() {
   })
 
   const [booking, setBooking] = useState<BookingResponse | null>(null)
+  const [paymentMode, setPaymentMode] = useState<PaymentMode>('advance')
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
@@ -102,9 +110,9 @@ export default function Booking() {
         time_slot: timeSlot,
         ...form,
         coupon_code: form.coupon_code || undefined,
+        payment_mode: paymentMode,
       })
       setBooking(data)
-      goNext()
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to create booking'))
     } finally {
@@ -381,20 +389,95 @@ export default function Booking() {
               <ChevronLeft className="w-4 h-4" /> Back
             </button>
             <button
-              disabled={!canProceedStep2 || submitting}
-              onClick={handleCreateBooking}
+              disabled={!canProceedStep2}
+              onClick={goNext}
               className="btn-primary flex-1 flex items-center justify-center gap-2 disabled:opacity-40"
             >
-              {submitting && <Loader2 className="w-4 h-4 animate-spin" />} Continue
+              Continue <ChevronRight className="w-4 h-4" />
             </button>
           </div>
         </div>
       )}
 
-      {/* Step 3: Advance payment */}
-      {step === 3 && booking && (
+      {/* Step 3: Payment mode + payment */}
+      {step === 3 && !booking && (
         <div className="card space-y-4">
-          <h2 className="font-semibold text-brand-900">Advance Payment</h2>
+          <h2 className="font-semibold text-brand-900">Choose How to Pay</h2>
+          <div className="space-y-2.5">
+            {PAYMENT_OPTIONS.map((opt) => {
+              const amount =
+                opt.mode === 'full'
+                  ? (selectedService?.price ?? 0)
+                  : opt.mode === 'advance'
+                    ? Math.round(((selectedService?.price ?? 0) * ADVANCE_PERCENT) / 100)
+                    : 0
+              return (
+                <button
+                  key={opt.mode}
+                  onClick={() => setPaymentMode(opt.mode)}
+                  aria-pressed={paymentMode === opt.mode}
+                  className={`w-full text-left p-4 rounded-2xl border-2 transition-all ${paymentMode === opt.mode ? 'border-brand-500 bg-brand-50' : 'border-brand-100 bg-white'}`}
+                >
+                  <div className="flex justify-between items-center gap-2">
+                    <p className="font-semibold text-brand-900 text-sm">{opt.label}</p>
+                    <p className="font-bold text-gold-500 whitespace-nowrap">₹{amount.toLocaleString('en-IN')}</p>
+                  </div>
+                  <p className="text-xs text-brand-800/50 mt-1">{opt.sub}</p>
+                </button>
+              )
+            })}
+          </div>
+          <p className="text-xs text-center text-brand-800/40">
+            Final amount reflects any coupon discount applied to your booking.
+          </p>
+          <div className="flex gap-3">
+            <button onClick={goBack} className="btn-secondary flex-1 flex items-center justify-center gap-2">
+              <ChevronLeft className="w-4 h-4" /> Back
+            </button>
+            <button
+              disabled={submitting}
+              onClick={handleCreateBooking}
+              className="btn-primary flex-1 flex items-center justify-center gap-2 disabled:opacity-40"
+            >
+              {submitting && <Loader2 className="w-4 h-4 animate-spin" />} Confirm Booking
+            </button>
+          </div>
+        </div>
+      )}
+
+      {step === 3 && booking && booking.payment_mode === 'pay_after_service' && (
+        <div className="card space-y-4">
+          <h2 className="font-semibold text-brand-900">Booking Confirmed</h2>
+          <div className="bg-brand-50 rounded-2xl p-4 space-y-1.5">
+            <div className="flex justify-between text-sm">
+              <span className="text-brand-800/60">Service</span>
+              <span className="font-semibold text-brand-900">{selectedService?.name}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-brand-800/60">Date &amp; Time</span>
+              <span className="font-semibold text-brand-900">
+                {booking.booking_date}, {booking.time_slot}
+              </span>
+            </div>
+            <div className="flex justify-between text-base pt-1.5 border-t border-brand-200">
+              <span className="font-semibold text-brand-900">Due After Service</span>
+              <span className="font-bold text-gold-500">₹{booking.total_amount.toLocaleString('en-IN')}</span>
+            </div>
+          </div>
+          <p className="text-xs text-center text-brand-800/40">
+            No payment is required now. The full amount is collected after your appointment.
+          </p>
+          <button onClick={goNext} className="btn-primary w-full flex items-center justify-center gap-2">
+            Continue <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {step === 3 && booking && booking.payment_mode !== 'pay_after_service' && (
+        <div className="card space-y-4">
+          <h2 className="font-semibold text-brand-900">
+            {booking.payment_mode === 'full' ? 'Full Payment' : 'Advance Payment'}
+          </h2>
           <div className="bg-brand-50 rounded-2xl p-4 space-y-1.5">
             <div className="flex justify-between text-sm">
               <span className="text-brand-800/60">Service</span>
@@ -411,8 +494,10 @@ export default function Booking() {
               <span className="font-semibold text-brand-900">₹{booking.total_amount.toLocaleString('en-IN')}</span>
             </div>
             <div className="flex justify-between text-base pt-1.5 border-t border-brand-200">
-              <span className="font-semibold text-brand-900">Advance to Pay Now</span>
-              <span className="font-bold text-gold-500">₹{booking.advance_amount.toLocaleString('en-IN')}</span>
+              <span className="font-semibold text-brand-900">
+                {booking.payment_mode === 'full' ? 'Amount to Pay Now' : 'Advance to Pay Now'}
+              </span>
+              <span className="font-bold text-gold-500">₹{booking.balance_amount.toLocaleString('en-IN')}</span>
             </div>
           </div>
           <button
@@ -421,7 +506,7 @@ export default function Booking() {
             className="btn-gold w-full flex items-center justify-center gap-2"
           >
             {submitting && <Loader2 className="w-4 h-4 animate-spin" />} Pay ₹
-            {booking.advance_amount.toLocaleString('en-IN')} Now
+            {booking.balance_amount.toLocaleString('en-IN')} Now
           </button>
           <p className="text-xs text-center text-brand-800/40">
             Secured by Razorpay · UPI, Cards, Net Banking &amp; Wallets accepted

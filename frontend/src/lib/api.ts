@@ -23,6 +23,9 @@ import type {
   CouponCreateInput,
   CurrentUser,
   BookingStatus,
+  PaymentRecordResponse,
+  PaymentRecordCreateInput,
+  RecordPaymentResponse,
 } from '@/types'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
@@ -88,6 +91,12 @@ export const createPaymentOrder = (bookingId: string): Promise<AxiosResponse<Cre
   api.post('/payments/create-order', { booking_id: bookingId })
 export const verifyPayment = (data: VerifyPaymentInput): Promise<AxiosResponse<BookingResponse>> =>
   api.post('/payments/verify', data)
+export const getPaymentHistory = (bookingId: string): Promise<AxiosResponse<PaymentRecordResponse[]>> =>
+  api.get(`/payments/${bookingId}/history`)
+export const recordPayment = (
+  bookingId: string,
+  data: PaymentRecordCreateInput,
+): Promise<AxiosResponse<RecordPaymentResponse>> => api.post(`/payments/${bookingId}/record`, data)
 
 // Admin
 export const getAdminDashboard = (): Promise<AxiosResponse<AdminDashboardResponse>> => api.get('/admin/dashboard')

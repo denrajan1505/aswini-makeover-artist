@@ -20,6 +20,8 @@ import {
   getBlockedDates,
   blockDate,
   unblockDate,
+  getPaymentHistory,
+  recordPayment,
   getErrorMessage,
 } from '@/lib/api'
 import type {
@@ -31,6 +33,8 @@ import type {
   Coupon,
   ReviewResponse,
   BlockedDate,
+  PaymentRecordResponse,
+  PaymentMethod,
 } from '@/types'
 
 const TABS = [
@@ -46,6 +50,30 @@ const TABS = [
 type Tab = (typeof TABS)[number]
 
 const BOOKING_STATUSES = ['pending', 'confirmed', 'completed', 'cancelled'] as const
+
+const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
+  { value: 'cash', label: 'Cash' },
+  { value: 'upi', label: 'UPI' },
+  { value: 'google_pay', label: 'Google Pay' },
+  { value: 'phonepe', label: 'PhonePe' },
+  { value: 'razorpay', label: 'Razorpay' },
+  { value: 'card', label: 'Card' },
+  { value: 'bank_transfer', label: 'Bank Transfer' },
+]
+
+function paymentStatusBadge(status: string): string {
+  const map: Record<string, string> = {
+    unpaid: 'bg-red-100 text-red-700',
+    partially_paid: 'bg-yellow-100 text-yellow-700',
+    paid: 'bg-green-100 text-green-700',
+  }
+  return map[status] || 'bg-brand-100 text-brand-700'
+}
+
+function paymentStatusLabel(status: string): string {
+  const map: Record<string, string> = { unpaid: 'Unpaid', partially_paid: 'Partially Paid', paid: 'Paid' }
+  return map[status] || status
+}
 
 export default function Admin() {
   const [tab, setTab] = useState<Tab>('Dashboard')
@@ -102,7 +130,7 @@ function DashboardTab() {
     <div className="space-y-5">
       <div className="card bg-gradient-to-br from-brand-500 to-gold-400 text-white border-0">
         <div className="flex items-center gap-2 text-white/80 text-sm">
-          <TrendingUp className="w-4 h-4" /> Monthly Revenue (advance collected)
+          <TrendingUp className="w-4 h-4" /> Monthly Revenue (collected)
         </div>
         <p className="text-3xl font-bold mt-1">₹{data.monthly_revenue.toLocaleString('en-IN')}</p>
       </div>
@@ -149,6 +177,11 @@ function BookingsTab() {
   const [bookings, setBookings] = useState<BookingResponse[]>([])
   const [filter, setFilter] = useState('')
   const [loading, setLoading] = useState(true)
+  const [recording, setRecording] = useState<BookingResponse | null>(null)
+  const [paymentForm, setPaymentForm] = useState({ amount: '', method: 'cash' as PaymentMethod, note: '' })
+  const [expanded, setExpanded] = useState<string | null>(null)
+  const [history, setHistory] = useState<Record<string, PaymentRecordResponse[]>>({})
+  const [historyLoading, setHistoryLoading] = useState(false)
 
   const load = () => {
     setLoading(true)
@@ -168,6 +201,50 @@ function BookingsTab() {
       load()
     } catch {
       toast.error('Failed to update status')
+    }
+  }
+
+  const loadHistory = (bookingId: string) => {
+    setHistoryLoading(true)
+    getPaymentHistory(bookingId)
+      .then(({ data }) => setHistory((h) => ({ ...h, [bookingId]: data })))
+      .finally(() => setHistoryLoading(false))
+  }
+
+  const toggleHistory = (bookingId: string) => {
+    if (expanded === bookingId) {
+      setExpanded(null)
+      return
+    }
+    setExpanded(bookingId)
+    if (!history[bookingId]) loadHistory(bookingId)
+  }
+
+  const openRecord = (b: BookingResponse) => {
+    setRecording(b)
+    setPaymentForm({ amount: b.balance_amount.toString(), method: 'cash', note: '' })
+  }
+
+  const handleRecordPayment = async () => {
+    if (!recording) return
+    const amount = parseFloat(paymentForm.amount)
+    if (!amount || amount <= 0) {
+      toast.error('Enter a valid amount')
+      return
+    }
+    try {
+      await recordPayment(recording.id, {
+        amount,
+        method: paymentForm.method,
+        note: paymentForm.note || undefined,
+      })
+      toast.success('Payment recorded')
+      const bookingId = recording.id
+      setRecording(null)
+      load()
+      if (expanded === bookingId) loadHistory(bookingId)
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to record payment'))
     }
   }
 
@@ -202,11 +279,22 @@ function BookingsTab() {
                     {b.booking_date} · {b.time_slot} · {b.customer_phone}
                   </p>
                 </div>
-                <span className="text-xs font-semibold rounded-full px-2.5 py-1 bg-brand-100 text-brand-700 capitalize">
-                  {b.payment_status}
+                <span className={`text-xs font-semibold rounded-full px-2.5 py-1 ${paymentStatusBadge(b.payment_status)}`}>
+                  {paymentStatusLabel(b.payment_status)}
                 </span>
               </div>
-              <div className="flex gap-1.5 mt-3">
+
+              <div className="flex justify-between items-center mt-2 text-xs text-brand-800/60">
+                <span className="capitalize">{b.payment_mode.replace(/_/g, ' ')}</span>
+                <span>
+                  Paid ₹{b.amount_paid.toLocaleString('en-IN')} / ₹{b.total_amount.toLocaleString('en-IN')}
+                  {b.balance_amount > 0 && (
+                    <span className="text-red-500 font-semibold"> · Balance ₹{b.balance_amount.toLocaleString('en-IN')}</span>
+                  )}
+                </span>
+              </div>
+
+              <div className="flex gap-1.5 mt-3 flex-wrap">
                 {BOOKING_STATUSES.map((s) => (
                   <button
                     key={s}
@@ -218,8 +306,114 @@ function BookingsTab() {
                   </button>
                 ))}
               </div>
+              <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                <button
+                  onClick={() => openRecord(b)}
+                  disabled={b.balance_amount <= 0}
+                  className="text-xs font-semibold px-3 py-1.5 rounded-full bg-gold-100 text-gold-700 disabled:opacity-40"
+                >
+                  Record Payment
+                </button>
+                <button
+                  onClick={() => toggleHistory(b.id)}
+                  className="text-xs font-semibold px-3 py-1.5 rounded-full bg-brand-50 text-brand-700"
+                >
+                  {expanded === b.id ? 'Hide History' : 'Payment History'}
+                </button>
+              </div>
+
+              {expanded === b.id && (
+                <div className="mt-2 pt-2 border-t border-brand-100 space-y-1">
+                  {historyLoading && !history[b.id] ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-brand-500" />
+                  ) : (history[b.id] || []).length === 0 ? (
+                    <p className="text-xs text-brand-800/40">No payments recorded yet.</p>
+                  ) : (
+                    (history[b.id] || []).map((p) => (
+                      <div key={p.id} className="flex justify-between text-xs text-brand-800/60">
+                        <span className="capitalize">
+                          {p.method.replace(/_/g, ' ')}
+                          {p.note ? ` — ${p.note}` : ''}
+                        </span>
+                        <span className="font-semibold text-brand-900">₹{p.amount.toLocaleString('en-IN')}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
             </div>
           ))}
+        </div>
+      )}
+
+      {recording && (
+        <div
+          className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+          onClick={() => setRecording(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="record-payment-title"
+        >
+          <div
+            className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="record-payment-title" className="font-bold text-brand-900 text-lg">
+              Record Payment
+            </h2>
+            <p className="text-sm text-brand-800/60">
+              {recording.customer_name} · Balance ₹{recording.balance_amount.toLocaleString('en-IN')}
+            </p>
+            <div>
+              <label htmlFor="payment-amount" className="block text-sm font-medium text-brand-800 mb-1.5">
+                Amount (₹)
+              </label>
+              <input
+                id="payment-amount"
+                type="number"
+                className="input-field"
+                value={paymentForm.amount}
+                onChange={(e) => setPaymentForm((f) => ({ ...f, amount: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label htmlFor="payment-method" className="block text-sm font-medium text-brand-800 mb-1.5">
+                Method
+              </label>
+              <select
+                id="payment-method"
+                className="input-field"
+                value={paymentForm.method}
+                onChange={(e) => setPaymentForm((f) => ({ ...f, method: e.target.value as PaymentMethod }))}
+              >
+                {PAYMENT_METHODS.map((m) => (
+                  <option key={m.value} value={m.value}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="payment-note" className="block text-sm font-medium text-brand-800 mb-1.5">
+                Note (optional)
+              </label>
+              <input
+                id="payment-note"
+                className="input-field"
+                value={paymentForm.note}
+                onChange={(e) => setPaymentForm((f) => ({ ...f, note: e.target.value }))}
+                placeholder="e.g. transaction ref"
+              />
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => setRecording(null)} className="flex-1 btn-secondary">
+                Cancel
+              </button>
+              <button onClick={handleRecordPayment} className="flex-1 btn-primary">
+                Save
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
