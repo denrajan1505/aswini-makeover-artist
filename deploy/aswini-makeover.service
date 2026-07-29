@@ -1,0 +1,14 @@
+[Unit]
+Description=Aswini Makeover Artist FastAPI Backend
+After=network.target
+
+[Service]
+User=root
+WorkingDirectory=/var/www/aswini-makeover/backend
+EnvironmentFile=/var/www/aswini-makeover/backend/.env
+ExecStart=/var/www/aswini-makeover/backend/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8003 --workers 2
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
