@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent, type ChangeEvent } from 'react'
 import { Loader2, TrendingUp, Clock, CheckCircle2, XCircle, Trash2, Plus, Reply } from 'lucide-react'
 import toast from 'react-hot-toast'
 import {
@@ -22,6 +22,7 @@ import {
   unblockDate,
   getPaymentHistory,
   recordPayment,
+  uploadPortfolioImage,
   getErrorMessage,
 } from '@/lib/api'
 import type {
@@ -577,10 +578,12 @@ interface PortfolioFormState {
 }
 
 const EMPTY_PORTFOLIO_FORM: PortfolioFormState = { category: 'Bride', image_url: '', caption: '' }
+const MAX_UPLOAD_BYTES = 8 * 1024 * 1024
 
 function PortfolioTab() {
   const [items, setItems] = useState<PortfolioItemResponse[]>([])
   const [form, setForm] = useState<PortfolioFormState>(EMPTY_PORTFOLIO_FORM)
+  const [uploading, setUploading] = useState(false)
   const load = () => getPortfolio().then(({ data }) => setItems(data))
   useEffect(() => {
     load()
@@ -603,13 +606,54 @@ function PortfolioTab() {
     load()
   }
 
+  const handleFileSelect = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    if (file.size > MAX_UPLOAD_BYTES) {
+      toast.error('Image must be under 8MB')
+      return
+    }
+    setUploading(true)
+    try {
+      const { data } = await uploadPortfolioImage(file)
+      setForm((f) => ({ ...f, image_url: data.url }))
+      toast.success('Image uploaded')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to upload image'))
+    } finally {
+      setUploading(false)
+    }
+  }
+
   return (
     <div className="space-y-5">
       <form onSubmit={handleAdd} className="card space-y-3">
         <h2 className="font-semibold text-brand-900">Add Portfolio Image</h2>
+        <div>
+          <label htmlFor="portfolio-file" className="block text-sm font-medium text-brand-800 mb-1.5">
+            Upload Image
+          </label>
+          <input
+            id="portfolio-file"
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            onChange={handleFileSelect}
+            disabled={uploading}
+            className="input-field"
+          />
+          {uploading && (
+            <p className="text-xs text-brand-800/50 mt-1.5 flex items-center gap-1.5">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" /> Uploading...
+            </p>
+          )}
+        </div>
+        {form.image_url && (
+          <img src={form.image_url} alt="Selected preview" className="h-24 rounded-xl object-cover" />
+        )}
         <input
           className="input-field"
-          placeholder="Image URL"
+          placeholder="Image URL (auto-filled after upload, or paste one)"
           value={form.image_url}
           onChange={(e) => setForm((f) => ({ ...f, image_url: e.target.value }))}
           required

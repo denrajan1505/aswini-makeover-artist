@@ -1,5 +1,6 @@
 import logging
-from fastapi import APIRouter, Header, HTTPException, Depends
+import uuid
+from fastapi import APIRouter, Header, HTTPException, Depends, UploadFile, File
 from app.core.supabase_client import supabase, get_user_from_token
 from app.core.config import settings
 from app.models.schemas import PortfolioItemResponse, PortfolioItemCreate
@@ -7,6 +8,9 @@ from app.models.schemas import PortfolioItemResponse, PortfolioItemCreate
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/portfolio", tags=["portfolio"])
+
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+MAX_UPLOAD_BYTES = 8 * 1024 * 1024
 
 
 def require_admin(authorization: str = Header(...)):
@@ -27,6 +31,26 @@ async def list_portfolio(category: str | None = None):
         query = query.eq("category", category)
     result = query.order("sort_order").order("created_at", desc=True).execute()
     return result.data or []
+
+
+@router.post("/upload")
+async def upload_portfolio_image(file: UploadFile = File(...), _admin=Depends(require_admin)):
+    if file.content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(status_code=400, detail="Only JPEG, PNG, WEBP, or GIF images are allowed")
+    data = await file.read()
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=400, detail="Image must be under 8MB")
+
+    ext = file.filename.rsplit(".", 1)[-1].lower() if file.filename and "." in file.filename else "jpg"
+    path = f"{uuid.uuid4()}.{ext}"
+
+    try:
+        supabase.storage.from_("portfolio-images").upload(path, data, {"content-type": file.content_type})
+    except Exception as e:
+        logger.error("Portfolio image upload failed: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to upload image")
+
+    return {"url": supabase.storage.from_("portfolio-images").get_public_url(path)}
 
 
 @router.post("/", response_model=PortfolioItemResponse)

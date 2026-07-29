@@ -61,6 +61,11 @@ export const getPortfolio = (category?: string): Promise<AxiosResponse<Portfolio
 export const createPortfolioItem = (data: PortfolioItemCreateInput): Promise<AxiosResponse<PortfolioItemResponse>> =>
   api.post('/portfolio/', data)
 export const deletePortfolioItem = (id: string): Promise<AxiosResponse<void>> => api.delete(`/portfolio/${id}`)
+export const uploadPortfolioImage = (file: File): Promise<AxiosResponse<{ url: string }>> => {
+  const formData = new FormData()
+  formData.append('file', file)
+  return api.post('/portfolio/upload', formData)
+}
 
 // Bookings
 export const getBookedSlots = (bookingDate: string): Promise<AxiosResponse<BookedSlotsResponse>> =>
