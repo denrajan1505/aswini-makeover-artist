@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     cors_origins: List[str] = ["http://localhost:5173"]
     admin_emails: List[str] = []
 
-    whatsapp_number: str = "919094678502"
+    whatsapp_number: str = "917708566191"
     frontend_url: str = "http://localhost:5173"
     advance_payment_percent: float = 30.0
 

@@ -2,7 +2,7 @@ import { useNavigate, Link } from 'react-router-dom'
 import { LogOut, Phone, Mail, Instagram, Star, MessageCircle, CalendarClock } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 
-const WHATSAPP_NUMBER = import.meta.env.VITE_WHATSAPP_NUMBER || '919094678502'
+const WHATSAPP_NUMBER = import.meta.env.VITE_WHATSAPP_NUMBER || '917708566191'
 
 export default function Profile() {
   const { user, signOut, isAdmin } = useAuth()
@@ -47,9 +47,6 @@ export default function Profile() {
 
       <div className="card space-y-3">
         <h2 className="font-semibold text-brand-900">Contact Us</h2>
-        <a href="tel:+919094678502" className="flex items-center gap-3 text-sm text-brand-800/70">
-          <Phone className="w-4 h-4 text-brand-500" /> +91 90946 78502
-        </a>
         <a href="tel:+917708566191" className="flex items-center gap-3 text-sm text-brand-800/70">
           <Phone className="w-4 h-4 text-brand-500" /> +91 77085 66191
         </a>

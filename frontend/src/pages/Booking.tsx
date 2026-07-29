@@ -19,7 +19,7 @@ const TIME_SLOTS = [
 ]
 
 const STEPS = ['Service', 'Date & Time', 'Your Details', 'Payment', 'Confirmed']
-const WHATSAPP_NUMBER = import.meta.env.VITE_WHATSAPP_NUMBER || '919094678502'
+const WHATSAPP_NUMBER = import.meta.env.VITE_WHATSAPP_NUMBER || '917708566191'
 
 function todayISO() {
   return new Date().toISOString().split('T')[0]
